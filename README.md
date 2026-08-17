@@ -72,7 +72,7 @@ uvicorn nexus_blackbox_gateway.app:app --host 127.0.0.1 --port 8090
 
 ## Challenge runner
 
-A small JSON-driven challenge client is included. Provider secrets are read from an environment variable rather than stored in the challenge file.
+A JSON-driven challenge client is included. Provider secrets are read from an environment variable rather than stored in the challenge file.
 
 ```bash
 export VALIDATION_PROVIDER_API_KEY='temporary-key'
@@ -80,11 +80,9 @@ python -m nexus_blackbox_gateway.rig examples/basic-blackbox-challenge.json \
   --gateway-url https://your-validation-host
 ```
 
-The supplied example is intentionally only a smoke test. Stronger continuity, correction, isolation, authority, and evidence challenge packs should be added only when their observable contracts are ready; they do not require publishing the private mechanisms that satisfy them.
-
 ## Operational controls
 
-The gateway includes a deployment kill switch, optional bearer-token gate, and an active-sandbox capacity ceiling. Public deployments should additionally apply edge rate limiting (for example at the reverse proxy/CDN), use a dedicated synthetic runtime tenant, and keep the BYO router's admin interface on a private network.
+The gateway includes a deployment kill switch, optional bearer-token gate, and an active-sandbox capacity ceiling. Public deployments should additionally apply edge rate limiting (for example at the reverse proxy/CDN), use dedicated synthetic runtime tenants, and keep the BYO router's admin interface on a private network.
 
 Recommended environment controls:
 
@@ -93,3 +91,39 @@ Recommended environment controls:
 - `MAX_ACTIVE_SANDBOXES=...` — hard concurrent sandbox ceiling.
 
 Evaluator provider keys should be temporary, narrowly funded, and revoked after testing.
+
+## Built-in core challenge suite
+
+Version `0.2.0` includes `nexus-blackbox-core-v1`, a fixed black-box suite for the opaque target. It checks only externally observable invariants:
+
+- evaluator-owned provider traffic is actually observed by the separate router;
+- same-conversation continuity;
+- cross-conversation continuity for the same synthetic principal;
+- correction persistence (current value wins over an explicitly obsolete value);
+- cross-principal isolation using simultaneous sandboxes and random canary data;
+- observable effect of a public `mode-card.v1` artifact;
+- retrieval and secret-safety of the public evidence envelope.
+
+Run it with a temporary provider key:
+
+```bash
+export VALIDATION_PROVIDER_API_KEY='temporary-evaluator-key'
+export VALIDATION_GATEWAY_TOKEN='gateway-token-if-required'
+
+nexus-blackbox-suite \
+  --gateway-url https://validation.example \
+  --provider-base-url https://your-openai-compatible-provider.example/v1 \
+  --provider-model your-model-id
+```
+
+A failing invariant stays failed. The suite does not reinterpret model narration as proof of persistence, isolation, routing, or evidence integrity.
+
+### Community / evaluator challenges
+
+`challenge.schema.json` defines the bounded JSON format accepted by the generic challenge runner. Evaluators can author unseen cases using ordinary messages, conventional `conversation_id` boundaries, response assertions, public artifacts, and an optional requirement that the BYO provider route be independently observed.
+
+The schema intentionally has no fields for SSR, gauges, memory selection, internal tool registries, prompts, database state, or private runtime components.
+
+## Claim ceiling
+
+A successful run establishes only that the recorded opaque target, version, evaluator-supplied provider configuration, and challenge inputs satisfied the stated observable invariants at that time. It is not source disclosure, a whole-system proof, an independent security audit, or universal certification of Nexus Synapse.

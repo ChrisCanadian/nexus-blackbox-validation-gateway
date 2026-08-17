@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nexus-blackbox-validation-gateway"
-version = "0.1.0"
+version = "0.2.0"
 description = "Public-safe black-box validation gateway for opaque AI runtime targets"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.120,<1",
   "httpx>=0.28,<1",
   "pydantic>=2.10,<3",
+  "jsonschema>=4.23,<5",
   "uvicorn>=0.30,<1",
 ]
 
@@ -22,3 +23,7 @@ test = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[project.scripts]
+nexus-blackbox-challenge = "nexus_blackbox_gateway.rig:main"
+nexus-blackbox-suite = "nexus_blackbox_gateway.suite:main"

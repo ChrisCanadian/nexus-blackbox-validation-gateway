@@ -10,13 +10,17 @@ from nexus_blackbox_gateway.rig import run_challenge
 class FakeRouter:
     async def register(self, **kwargs):
         return "route-token-123456789"
+    async def usage(self, route_token):
+        return {"model": "m", "request_count": 1, "last_upstream_status": 200}
     async def revoke(self, route_token):
         pass
 
 
 class FakeTarget:
-    async def turn(self, *, sandbox_id, route_token, message, artifacts):
+    async def turn(self, **kwargs):
         return {"response": "VALIDATION_OK", "target_label": "opaque-test", "metadata": {}}
+    async def close_sandbox(self, sandbox_id):
+        pass
 
 
 @pytest.mark.asyncio
@@ -30,6 +34,7 @@ async def test_challenge_rig_executes_spec_and_assertions():
             "steps": [{
                 "name": "exact-token",
                 "message": "say it",
+                "conversation_id": "smoke",
                 "assertions": [{"type": "equals", "value": "VALIDATION_OK"}],
             }],
         }

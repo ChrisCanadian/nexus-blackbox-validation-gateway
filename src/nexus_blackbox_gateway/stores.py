@@ -11,6 +11,8 @@ class SandboxRecord:
     sandbox_id: str
     route_token: str
     provider_model: str
+    supports_tools: bool
+    max_completion_tokens: int
     expires_at: datetime
     artifacts: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -19,12 +21,15 @@ class SandboxStore:
     def __init__(self) -> None:
         self._items: dict[str, SandboxRecord] = {}
 
-    def create(self, route_token: str, provider_model: str, ttl_seconds: int) -> SandboxRecord:
+    def create(self, route_token: str, provider_model: str, ttl_seconds: int,
+               *, supports_tools: bool, max_completion_tokens: int) -> SandboxRecord:
         sandbox_id = "sbx_" + secrets.token_urlsafe(18)
         rec = SandboxRecord(
             sandbox_id=sandbox_id,
             route_token=route_token,
             provider_model=provider_model,
+            supports_tools=supports_tools,
+            max_completion_tokens=max_completion_tokens,
             expires_at=datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds),
         )
         self._items[sandbox_id] = rec

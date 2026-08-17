@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from jsonschema import Draft202012Validator
 
 
 @dataclass
@@ -29,20 +30,25 @@ def _assert_response(response: str, assertion: dict[str, Any]) -> tuple[bool, st
         ok = expected not in response
         return ok, f"response {'does not contain' if ok else 'contains'} forbidden text"
     if kind == "equals":
-        ok = response == expected
+        ok = response.strip() == expected.strip()
         return ok, f"response {'equals' if ok else 'does not equal'} expected text"
+    if kind == "starts_with":
+        ok = response.lstrip().startswith(expected)
+        return ok, f"response {'starts with' if ok else 'does not start with'} expected text"
     raise ValueError(f"unsupported assertion type: {kind}")
 
 
 async def run_challenge(spec: dict[str, Any], *, gateway_url: str, api_key: str,
+                        gateway_token: str | None = None,
                         client: httpx.AsyncClient | None = None) -> dict[str, Any]:
     owns_client = client is None
     client = client or httpx.AsyncClient(timeout=900)
     base = gateway_url.rstrip("/")
+    headers = {"Authorization": f"Bearer {gateway_token}"} if gateway_token else {}
     try:
         provider = dict(spec["provider"])
         provider["api_key"] = api_key
-        created = await client.post(f"{base}/v1/sandboxes", json={
+        created = await client.post(f"{base}/v1/sandboxes", headers=headers, json={
             "provider": provider,
             "ttl_seconds": int(spec.get("ttl_seconds", 900)),
         })
@@ -50,7 +56,11 @@ async def run_challenge(spec: dict[str, Any], *, gateway_url: str, api_key: str,
         sandbox_id = created.json()["sandbox_id"]
 
         for artifact in spec.get("artifacts", []):
-            response = await client.post(f"{base}/v1/sandboxes/{sandbox_id}/artifacts", json=artifact)
+            response = await client.post(
+                f"{base}/v1/sandboxes/{sandbox_id}/artifacts",
+                headers=headers,
+                json=artifact,
+            )
             response.raise_for_status()
 
         verdicts: list[ChallengeVerdict] = []
@@ -58,7 +68,11 @@ async def run_challenge(spec: dict[str, Any], *, gateway_url: str, api_key: str,
         for index, step in enumerate(spec.get("steps", []), start=1):
             turn = await client.post(
                 f"{base}/v1/sandboxes/{sandbox_id}/turns",
-                json={"message": step["message"]},
+                headers=headers,
+                json={
+                    "message": step["message"],
+                    "conversation_id": step.get("conversation_id", "default"),
+                },
             )
             turn.raise_for_status()
             payload = turn.json()
@@ -70,6 +84,10 @@ async def run_challenge(spec: dict[str, Any], *, gateway_url: str, api_key: str,
                 ok, detail = _assert_response(payload["response"], assertion)
                 passed = passed and ok
                 details.append(detail)
+            if step.get("require_provider_route", False):
+                ok = bool(payload.get("provider_route_observed"))
+                passed = passed and ok
+                details.append("BYO provider route observed" if ok else "BYO provider route not observed")
             verdicts.append(ChallengeVerdict(
                 name=step.get("name", f"step-{index}"),
                 passed=passed,
@@ -77,10 +95,10 @@ async def run_challenge(spec: dict[str, Any], *, gateway_url: str, api_key: str,
                 run_id=payload["run_id"],
             ))
 
-        await client.delete(f"{base}/v1/sandboxes/{sandbox_id}")
+        await client.delete(f"{base}/v1/sandboxes/{sandbox_id}", headers=headers)
         return {
             "challenge": spec.get("name", "unnamed"),
-            "passed": all(v.passed for v in verdicts),
+            "passed": bool(verdicts) and all(v.passed for v in verdicts),
             "verdicts": [v.__dict__ for v in verdicts],
             "run_ids": run_ids,
         }
@@ -89,17 +107,35 @@ async def run_challenge(spec: dict[str, Any], *, gateway_url: str, api_key: str,
             await client.aclose()
 
 
+def validate_spec(spec: dict[str, Any], schema_path: Path | None = None) -> None:
+    schema_path = schema_path or (Path(__file__).resolve().parents[2] / "challenge.schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    errors = sorted(Draft202012Validator(schema).iter_errors(spec), key=lambda e: list(e.path))
+    if errors:
+        first = errors[0]
+        location = ".".join(str(x) for x in first.path) or "<root>"
+        raise ValueError(f"invalid challenge spec at {location}: {first.message}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a black-box validation challenge")
     parser.add_argument("spec", type=Path)
     parser.add_argument("--gateway-url", required=True)
     parser.add_argument("--api-key-env", default="VALIDATION_PROVIDER_API_KEY")
+    parser.add_argument("--gateway-token-env", default="VALIDATION_GATEWAY_TOKEN")
     args = parser.parse_args()
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
         raise SystemExit(f"missing provider API key in ${args.api_key_env}")
+    gateway_token = os.environ.get(args.gateway_token_env) or None
     spec = json.loads(args.spec.read_text(encoding="utf-8"))
-    result = asyncio.run(run_challenge(spec, gateway_url=args.gateway_url, api_key=api_key))
+    validate_spec(spec)
+    result = asyncio.run(run_challenge(
+        spec,
+        gateway_url=args.gateway_url,
+        api_key=api_key,
+        gateway_token=gateway_token,
+    ))
     print(json.dumps(result, indent=2))
     return 0 if result["passed"] else 1
 

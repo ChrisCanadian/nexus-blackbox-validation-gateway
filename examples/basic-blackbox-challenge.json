@@ -1,0 +1,21 @@
+{
+  "name": "basic-blackbox-smoke",
+  "provider": {
+    "base_url": "https://YOUR_OPENAI_COMPATIBLE_PROVIDER/v1",
+    "model": "YOUR_MODEL_ID",
+    "supports_tools": true,
+    "max_completion_tokens": 4096
+  },
+  "steps": [
+    {
+      "name": "basic-response",
+      "message": "Reply with the exact token VALIDATION_OK.",
+      "assertions": [
+        {
+          "type": "contains",
+          "value": "VALIDATION_OK"
+        }
+      ]
+    }
+  ]
+}

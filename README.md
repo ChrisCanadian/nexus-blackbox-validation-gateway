@@ -124,6 +124,21 @@ A failing invariant stays failed. The suite does not reinterpret model narration
 
 The schema intentionally has no fields for SSR, gauges, memory selection, internal tool registries, prompts, database state, or private runtime components.
 
+## Known deployment-target result — August 18, 2026
+
+A retained campaign through the private integration reached the existing Nexus deployment, but its fixed invariants **failed**.
+
+- Deterministic, distinct session mappings and all six persistence barriers passed.
+- Cross-conversation continuity failed when `keyword_memory_search` was blocked by the validation tool allowlist; the unavailable tool result outranked populated all-session CAG.
+- Correction persistence failed when extractive summarization retained the obsolete marker but dropped its replacement.
+- A separate unseen challenge passed because it avoided the blocked tool path and put the new correction value in its first sentence.
+
+The fixed-invariant failure is the controlling result. The separate unseen pass does not establish that deployed Nexus passed `nexus-blackbox-core-v1` or any broader validation.
+
+## Attribution and provenance
+
+See [`ATTRIBUTION.md`](ATTRIBUTION.md) for local authorship, Nexus lineage, external-component boundaries, and the reference that informed this repository's compact provenance practice.
+
 ## Claim ceiling
 
 A successful run establishes only that the recorded opaque target, version, evaluator-supplied provider configuration, and challenge inputs satisfied the stated observable invariants at that time. It is not source disclosure, a whole-system proof, an independent security audit, or universal certification of Nexus Synapse.
